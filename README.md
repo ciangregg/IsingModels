@@ -1,0 +1,2 @@
+# IsingModels
+Capstone project

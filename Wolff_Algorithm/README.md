@@ -1,3 +1,10 @@
+# The Wolff Cluster Alogrithm
+
+> 1. Randomly choose a site, the speed spin
+> 2. If a neighbouring spin is pointing in the same direction as the speed spin, add them to our cluster $\mathfrak{C}$ with probability $P_\text{add}=1-e^{-2\beta J}$ 
+> 3. In each we added repeat step 2, until there are no neighbouring spins left to be considered for inclusion in $\mathfrak{C}$ 
+> 4. Flip the Cluster $\mathfrak{C}$
+
 # Animations of the Wolff Algorithm
 
 ## Cluster growth 

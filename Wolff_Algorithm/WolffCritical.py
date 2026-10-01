@@ -194,6 +194,7 @@ def adaptive_wolff_run(T, L, J=1,
     m = np.mean(np.abs(mags_arr)) / Nspins
     chi = (np.mean(mags_arr**2) - np.mean(np.abs(mags_arr))**2) / (T * Nspins)
     E = np.mean(energies_arr)
+    cv = np.var(energies_arr) * Nspins / (T ** 2)
 
     return dict(T=T, mags=mags_arr, energies=energies_arr,
                 tau=tau_final, tau_found=found_final, n_eff=n_eff,

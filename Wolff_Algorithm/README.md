@@ -51,7 +51,7 @@ In a disordered states $<T_c$
 
 These produced reasonable results of: a $ 20 \times 20 $ lattice, using Warmup of $400$, Sample amount of $1000$ and at each temperature it ran $50$ times.
 
-<img src="plots/observables/observables_L20_sample1000_warmup400_nruns50.png" width="800px">
+<img src="plots/observables/wolffobservables_L20_sample1000_warmup400_nruns50.png" width="800px">
 
 # metropolis adaptive 
 <img src="plots/observables/metropolis/adaptive/metropolis_tau_L100_adaptive.png" width="800px">

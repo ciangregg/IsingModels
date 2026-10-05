@@ -1,2 +1,8 @@
 # Ignore Python Virtual Environment
 venv/
+
+#test plots
+Wolff_Algorithm/plots/critical/intermediate_plots/
+
+#cache
+Wolff_Algorithm/cache/

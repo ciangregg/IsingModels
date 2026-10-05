@@ -14,10 +14,10 @@ seed_numba(13)
 #Lattice size for the runs
 #Ls for finite-size scaling.
 #Ls = [10, 14, 18, 24, 32, 40, 48, 56, 64, 70, 76, 80, 84, 90]
-#Ls = [10, 14]
+Ls = [70]
 #Ls = list(range(10, 101, 2))   # [10, 12, 14, ..., 100]
 
-Ls = np.linspace(10, 80, 40, dtype=int).tolist()   # 40 roughly even sizes from 10 to 100
+#Ls = np.linspace(10, 80, 40, dtype=int).tolist()   # ie ..40 roughly even sizes from 10 to 100
 
 
 
@@ -39,45 +39,6 @@ def energy(s, J, h):
 
     return E
 
-
-## auto corralation and Tau
-
-def autocorr(x):
-    #Normalised autocorrelation phi(t) (or chi(t)) via FFT
-    x = np.asarray(x, dtype=float)
-    x = x - x.mean()
-    n = len(x)
-    f = np.fft.rfft(x, n=2 * n)                 # zero-pad to avoid wraparound
-    acf = np.fft.irfft(f * np.conj(f))[:n]
-    #acf /= np.arange(n, 0, -1)                  # divide by number of pairs (n - t)
-    return acf / acf[0]
-
-def tau_int(x, c=6.0):
-    #Integrated autocorrelation time with Sokal automatic windowing
-    #found=False means the window condition was never met
-    phi = autocorr(x)
-    taus = np.cumsum(phi) - 0.5
-    W = np.arange(len(taus))
-    ok = W >= c * taus
-    found = bool(ok.any())
-    m = np.argmax(ok) if found else len(taus) - 1
-    return taus[m], found
-
-
-def tau_at_Tc(L, n_runs=10, k=5000, max_steps=2_000_000):
-    Tc = 2 / np.log(1 + np.sqrt(2))
-    vals = []
-    for _ in range(n_runs):
-        r = adaptive_wolff_run(Tc, L, 1.0, k=k, Tc=Tc, max_steps=max_steps)
-        if r["ok"]:
-            vals.append(r["tau_sweeps"])
-    vals = np.array(vals)
-    if len(vals) < 2:
-        print(f" L={L}: only {len(vals)} converged runs, raise max_steps")
-        return np.nan, np.nan, len(vals)
-    print(f" L={L}: tau_sweeps = {vals.mean():.3f} ± {vals.std(ddof=1)/np.sqrt(len(vals)):.3f} "
-          f"({len(vals)}/{n_runs} converged)")
-    return vals.mean(), vals.std(ddof=1) / np.sqrt(len(vals)), len(vals)
 
 ## wolff alogrithm and simulation
 
@@ -313,17 +274,57 @@ def make_temps(L, Tc, n_coarse=20, n_fine=21, width=4.0, lo=1.8, hi=2.8):
     fine   = Tc + np.linspace(-width, width, n_fine) / L    # includes Tc exactly
     return np.unique(np.round(np.concatenate([coarse, fine]), 6))
 
+## auto corralation and Tau
+
+def autocorr(x):
+    #Normalised autocorrelation phi(t) (or chi(t)) via FFT
+    x = np.asarray(x, dtype=float)
+    x = x - x.mean()
+    n = len(x)
+    f = np.fft.rfft(x, n=2 * n)                 # zero-pad to avoid wraparound
+    acf = np.fft.irfft(f * np.conj(f))[:n]
+    #acf /= np.arange(n, 0, -1)                  # divide by number of pairs (n - t)
+    return acf / acf[0]
+
+def tau_int(x, c=6.0):
+    #Integrated autocorrelation time with Sokal automatic windowing
+    #found=False means the window condition was never met
+    phi = autocorr(x)
+    taus = np.cumsum(phi) - 0.5
+    W = np.arange(len(taus))
+    ok = W >= c * taus
+    found = bool(ok.any())
+    m = np.argmax(ok) if found else len(taus) - 1
+    return taus[m], found
+
+
+def tau_at_Tc_diag(L, n_runs=10, k=5000, max_steps=2_000_000):
+    Tc = 2 / np.log(1 + np.sqrt(2))
+    rows = []
+    for _ in range(n_runs):
+        r = adaptive_wolff_run(Tc, L, 1.0, k=k, Tc=Tc, max_steps=max_steps)
+        rows.append((r["ok"], r["tau"], r["nbar"] / L**2, r["tau_sweeps"],
+                     r["total_steps"], r["discard_n"]))
+    rows = np.array(rows, float)
+    print(f"L={L:3d} ok={int(rows[:,0].sum())}/{n_runs}  "
+          f"tau_steps={rows[:,1].mean():.2f}  nbar/N={rows[:,2].mean():.3f}  "
+          f"tau_sw per run: min={rows[:,3].min():.2f} med={np.median(rows[:,3]):.2f} "
+          f"max={rows[:,3].max():.2f}  steps={rows[:,4].mean():.0f}")
+
+for L in (30, 40, 50, 60, 70, 80):
+    tau_at_Tc_diag(L)
+    
 
 ## plot fitting
-def peak(temps, y, w=2):
+def peak(temps, y, Tc, L, w=2, k=4.0):
     temps, y = np.asarray(temps), np.asarray(y)
-    i = int(np.argmax(y))
-    lo, hi = max(i - w, 0), min(i + w + 1, len(y))
+    near = np.where(np.abs(temps - Tc) <= k / L)[0]     
+    lo, hi = max(i - w, near[0]), min(i + w + 1, near[-1] + 1)
     a, b, c = np.polyfit(temps[lo:hi], y[lo:hi], 2)
-    if a >= 0:                          # not a maximum: fall back to the grid max
+    if a >= 0:
         return temps[i], y[i]
     Tp = -b / (2 * a)
-    if not (temps[lo] <= Tp <= temps[hi - 1]):   # vertex outside the fitted window
+    if not (temps[lo] <= Tp <= temps[hi - 1]):
         return temps[i], y[i]
     return Tp, np.polyval([a, b, c], Tp)
 
@@ -356,12 +357,12 @@ for L in Ls:
     t = np.asarray(r["temps"])
 
     # Susceptibility peak
-    Tp, yp = peak(t, r["chi_mean"])
+    Tp, yp = peak(t, r["chi_mean"], Tc, L)
     Tchi.append(Tp)
     chimax.append(yp)
 
     # Specific heat peak
-    Tp, yp = peak(t, r["cv_mean"])
+    Tp, yp = peak(t, r["cv_mean"], Tc, L)
     Tcv.append(Tp)
     cvmax.append(yp)
     '''
@@ -369,7 +370,7 @@ for L in Ls:
     tau = np.interp(Tc,t, r["tausw_mean"])
     tau_c.append(tau)
     '''
-tauTc = {L: tau_at_Tc(L) for L in Ls}
+tauTc = {L: tau_at_Tc_diag(L) for L in Ls}
 tau_c   = np.array([tauTc[L][0] for L in Ls])    # means
 tau_err = np.array([tauTc[L][1] for L in Ls])    # standard errors
 

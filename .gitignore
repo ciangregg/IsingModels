@@ -6,3 +6,7 @@ Wolff_Algorithm/plots/critical/intermediate_plots/
 
 #cache
 Wolff_Algorithm/cache/
+
+# .vscode
+
+.vscode/

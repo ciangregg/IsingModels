@@ -4,16 +4,15 @@ The goal of this section was rewrite my MCMC methods in C++ for <i>speed</i>. We
 
 
 # Metropolis
-<table>
-  <img src="figs/met_observables_L100_nsweeps10000_nruns10.png" width="400">
-</table>
+  <img src="figs/met_observables_L100_nsweeps10000_nruns10.png" >
+
 
 ## auto correlation
 
 <table>
 
-  <img src="figs/met_tau_L100_nsweeps10000_nruns10.png" width="400">
-  <img src="figs/pyerrorsmet_tau_L100_nsweeps10000_nruns10.png" width="400">
+  <img src="figs/met_tau_L100_nsweeps10000_nruns10.png" width="800">
+  <img src="figs/pyerrorsmet_tau_L100_nsweeps10000_nruns10.png" width="800">
 </table>
 
 ### commands

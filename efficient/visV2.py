@@ -89,7 +89,7 @@ for a, y, e, col, name in panels:
     a.set_title(name); a.set_xlabel("T"); a.set_ylabel(name)
     a.legend()
 plt.tight_layout()
-plt.savefig(OBS_DIR / f"met_observables_L{L}_nsweeps{nsweeps}_nruns{n_runs}.pdf")
+plt.savefig(OBS_DIR / f"met_observables_L{L}_nsweeps{nsweeps}_nruns{n_runs}.svg")
 plt.close()
 
 tau_mean = tau.mean(axis=1)
@@ -106,3 +106,55 @@ for a, k, col, name in [(ax[0], 0, 'black', r"$|M|$"), (ax[1], 1, 'gray', r"$E$"
 plt.tight_layout()
 plt.savefig(OBS_DIR / f"met_tau_L{L}_nsweeps{nsweeps}_nruns{n_runs}.pdf")
 plt.close()
+
+##################
+def get_tauint(data_list, names, ens, S=2.0):
+    o = pe.Obs(data_list, names)
+    o.gamma_method(S=S)
+    return o.e_tauint[ens], o.e_dtauint[ens], o.e_windowsize[ens]
+
+temps = np.asarray(temps)
+nT = len(temps)
+N_spins = L * L
+
+tau_mean = np.zeros((nT, 2))   # [T, (|m|, e)]  tau_int of merged runs
+tau_std  = np.zeros((nT, 2))   # error from pyerrors (dtau)
+win      = np.zeros((nT, 2), dtype=int)
+bad      = np.zeros((nT, 2), dtype=bool)
+
+for i, T in enumerate(temps):
+    ens = f"T{T:.5f}"
+    m_data, e_data, names = [], [], []
+    for run in range(n_runs):
+        fname = BASE / ens / f"run{run:03d}.dat"
+        M, E = np.loadtxt(fname, usecols=(1, 2), unpack=True)
+        m_data.append(np.abs(M[n_eq:]) / N_spins)
+        e_data.append(E[n_eq:] / N_spins)
+        names.append(f"{ens}|r{run}")
+
+    n_samples = len(m_data[0])
+    for k, data in enumerate((m_data, e_data)):
+        tau_mean[i, k], tau_std[i, k], win[i, k] = get_tauint(data, names, ens)
+        # window "not met": W reached the end of the series (no plateau found)
+        bad[i, k] = win[i, k] >= n_samples - 1
+
+    print(f"T={T:.3f}  tau|m|={tau_mean[i,0]:.2f}+/-{tau_std[i,0]:.2f} (W={win[i,0]})  "
+          f"tau_e={tau_mean[i,1]:.2f}+/-{tau_std[i,1]:.2f} (W={win[i,1]})")
+    
+    
+    
+fig, ax = plt.subplots(1, 2, figsize=(10, 4))
+for a, k, col, lab in [(ax[0], 0, 'black', r"$|M|$"), (ax[1], 1, 'gray', r"$E$")]:
+    a.errorbar(temps, tau_mean[:, k], yerr=tau_std[:, k],
+               fmt='o', color=col, capsize=3)
+    if bad[:, k].any():
+        a.plot(temps[bad[:, k]], tau_mean[bad[:, k], k],
+               'rx', ms=10, label="window not met")
+    a.axvline(Tc, color='green', label=fr"$T_c={Tc:.2f}$")
+    a.set_title("pyerrors")
+    a.set_xlabel("T")
+    a.set_ylabel(rf"$\tau_{{int}}$ ({lab}, sweeps)")
+    a.legend()
+plt.tight_layout()
+plt.savefig(OBS_DIR / f"pyerrorsmet_tau_L{L}_nsweeps{nsweeps}_nruns{n_runs}.svg")
+plt.show()

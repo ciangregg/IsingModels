@@ -4,8 +4,8 @@
 #include <random>
 #include <vector>
 #include <fstream> // output
-#include <sstream>// for string
-#include <iomanip>// for string
+#include <sstream> // for string
+#include <iomanip> // for string
 #include <filesystem> // similar to os in python
 
 
@@ -40,12 +40,24 @@ int curM, curE;      // running totals
 
 // mt19937 "Mersenne Twister" a pseduo rand number gen with a seed 
 // same PRNG as np.random()
+const unsigned int baseSeed = 13;
 
-mt19937 gen(12345);
-uniform_real_distribution<double> dist(0.0, 1.0);
+mt19937 gen;
+uniform_real_distribution<double> dist(0.0, 1.0); // for random no
+uniform_int_distribution<int> siteDist(0, N - 1); // for radnom sites
 
 double drandom() {
      return dist(gen); 
+}
+
+int randSite() { 
+    return siteDist(gen); 
+}
+
+// spaces out seeds with close t & run
+void seedRun(int t, int run) {
+    seed_seq seq{baseSeed, (unsigned int)t, (unsigned int)run};
+    gen.seed(seq);
 }
 
 // comare other PRNGs
@@ -79,7 +91,7 @@ void initialiseSpins(){
 
 void sweep() {
     for (int k = 0; k < N; k++) {
-        int i = N * drandom();
+        int i = randSite();
         int nn, sum;
 
         if ((nn = i + XNN) >= N) nn -= N;
@@ -134,12 +146,29 @@ string rounding(double x, int digits = 3) {
     return s.str();
 }
 
+// meta data
+void writeMetadata(const string& dir, int nT, double Tmin, double Tmax,
+                   int nRuns, int nsweeps) {
+    fs::create_directories(dir);
+    ofstream m(dir + "/metadata.txt");
+    m << "L "        << L        << "\n"
+      << "nT "       << nT       << "\n"
+      << "Tmin "     << Tmin     << "\n"
+      << "Tmax "     << Tmax     << "\n"
+      << "nRuns "    << nRuns    << "\n"
+      << "nsweeps "  << nsweeps  << "\n"
+      << "baseSeed " << baseSeed << "\n"
+      << "engine mt19937\n"
+      << "seeding seed_seq{baseSeed, t_index, run_index}\n"
+      << "T_i = Tmin + (Tmax-Tmin)*i/(nT-1)\n";
+}
+
 
 
 int main() {
-    const int nT=5; // number of temps in the range
+    const int nT=20; // number of temps in the range
     const int nsweeps = 10000;
-    const int nRuns = 3;
+    const int nRuns = 10;
 
     const double Tmin=1.8;
     const double Tmax=2.8;
@@ -147,16 +176,21 @@ int main() {
     int  printingNo=nsweeps/100;
 
     vector<int> mags(nsweeps), ens(nsweeps);
+
+    const string baseDir = "data/met_results/L" + to_string(L) +
+                        "/nsweeps" + to_string(nsweeps);
+    writeMetadata(baseDir, nT, Tmin, Tmax, nRuns, nsweeps);
     
     // nT temps loop
     for (int t = 0; t < nT; t++) {
         T = Tmin + (Tmax - Tmin) * t / (nT - 1);
         initialiseProb();
-        cout << "T=" << T << "  prob[2]=" << prob[2] << "  prob[4]=" << prob[4] << endl;
+        cout << "T=" << T << " , "<< t+1<<"/"<<nT <<endl;
+        cout << "prob[2]=" << prob[2] << "  prob[4]=" << prob[4] << endl;
 
         for (int run=0; run < nRuns; run++){
             // new seed for RNG 
-            gen.seed(1000 * t + run);
+            seedRun(t, run);  
             initialiseSpins();
 
             curM = magnetisation();  
@@ -176,9 +210,7 @@ int main() {
             ostringstream rn;
             rn << "run" << setw(3) << setfill('0') << run << ".dat";
 
-            string filename = "data/met_results/L" + to_string(L) +
-                              "/nsweeps" + to_string(nsweeps) +
-                              "/T" + rounding(T, 5) + "/" + rn.str();
+            string filename = baseDir + "/T" + rounding(T, 5) + "/" + rn.str();
             fs::create_directories(fs::path(filename).parent_path());
             ofstream file(filename);
             

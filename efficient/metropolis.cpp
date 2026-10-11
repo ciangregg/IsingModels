@@ -1,26 +1,25 @@
+// modules
 #include <iostream>
-
 #include <cmath>
 #include <random>
 #include <vector>
-
-
 #include <fstream> // output
 #include <sstream>// for string
 #include <iomanip>// for string
 #include <filesystem> // similar to os in python
 
 
-
 using namespace std;
 namespace fs = std::filesystem;
 
+// defines
 
-#define L 101
+#define L 100
 #define N (L*L)
 #define XNN 1
 #define YNN L
 
+// variables
 const int J = 1;
 
 int s[N];
@@ -29,23 +28,54 @@ double T;
 const double Tc= 2 * abs(J) / log(1 + sqrt(2));
 int curM, curE;      // running totals
 
-// <random>, works better than my attempt, this uses Mersenne Twister
+
+// Pseudo-Random Number Generator
+// Randomn numbers are harder in C than python
+
+//first attempt
+/*double drandom(){
+    double randomNum100 = rand() % 101;
+    return randomNum100/100;
+}*/
+
+// mt19937 "Mersenne Twister" a pseduo rand number gen with a seed 
+// same PRNG as np.random()
+
 mt19937 gen(12345);
 uniform_real_distribution<double> dist(0.0, 1.0);
 
-double drandom() { return dist(gen); }
-
-/*
-double drandom(){
-    double randomNum100 = rand() % 101;
-    return randomNum100/100;
+double drandom() {
+     return dist(gen); 
 }
-*/
-void initialise() {
+
+// comare other PRNGs
+
+
+
+// Functions 
+
+// initialising for each temp/run
+// calculate the exp energy difference for each Temp, to avoid calculating exp each sweep 
+void initialiseProb() {
     for (int i = 2; i < 5; i += 2) {
         prob[i] = exp(-(2.0 * i )/ T);
     }
 }
+
+// cold or hot start for our spins
+void initialiseSpins(){
+        if(T< Tc){
+            // start with all spins up below T_c approx 2.269 -- cold start
+            for (int i = 0; i < N; i++) {s[i] = 1;}
+        }
+        else{
+            //random assignment of spins s[i] -- hot start
+            for (int i = 0; i < N; i++) {                     
+            s[i] = (drandom() < 0.5) ? 1 : -1;}
+        }
+}
+
+// core metropolis sweep algorithm
 
 void sweep() {
     for (int k = 0; k < N; k++) {
@@ -71,6 +101,7 @@ void sweep() {
     }
 }
 
+// full calculation of E and M
 int magnetisation(){
     int M=0;
     for (int i = 0; i < N; i++) {
@@ -83,87 +114,79 @@ int energy(){
     int E=0;
     for(int i=0; i<N; i++) {
         int right = i + XNN;
-        if(right>= N){
-            right-=N;
-        }
+        if(right>= N){right-=N;}
 
         int up = i + YNN;
-        if(up>= N){
-            up-=N;
-        }
+        if(up>= N){up-=N;}
 
         E -= J*s[i]*(s[right]+s[up]);
     };
     return E;
 }
 
+
+// auxillary functions
+
+// rounding doubles for neater filenames
 string rounding(double x, int digits = 3) {
     ostringstream s;
     s << fixed << setprecision(digits) << x;
     return s.str();
 }
 
-int main() {
-    double nT=50; // number of temps
-    double Tmin=1.8;
-    double Tmax=2.8;
 
+
+int main() {
+    const int nT=5; // number of temps in the range
     const int nsweeps = 10000;
+    const int nRuns = 3;
+
+    const double Tmin=1.8;
+    const double Tmax=2.8;
+
     int  printingNo=nsweeps/100;
 
     vector<int> mags(nsweeps), ens(nsweeps);
     
-     for (int t = 0; t < nT; t++) {
-
+    // nT temps loop
+    for (int t = 0; t < nT; t++) {
         T = Tmin + (Tmax - Tmin) * t / (nT - 1);
-        
-        initialise();
-
+        initialiseProb();
         cout << "T=" << T << "  prob[2]=" << prob[2] << "  prob[4]=" << prob[4] << endl;
 
-        // start below T_c approx 2.69
-        if(T< Tc){
-            for (int i = 0; i < N; i++) {   // start with all spins up
-                s[i] = 1;
-            }
-        }
-        else{
-            //random assignment of spins s[i]
-            for (int i = 0; i < N; i++) {   
-                if(drandom()<0.5){
-                s[i] = 1;
-                }
-                else{
-                s[i]= -1;
-                }
-            }
+        for (int run=0; run < nRuns; run++){
+            // new seed for RNG 
+            gen.seed(1000 * t + run);
+            initialiseSpins();
 
-        }
-        for(int step = 0; step < nsweeps; step++) {
             curM = magnetisation();  
             curE = energy(); 
 
-            sweep();
-            ens[step] = energy();
-            mags[step] = magnetisation();
-            if (step % printingNo == 0){
-                cout << "\r" << 100.0 * step / nsweeps << "% of " << nsweeps << flush;
+            for(int step = 0; step < nsweeps; step++) {
+                sweep();
+                mags[step] = curM;
+                ens[step]  = curE;
+                if ((step + 1) % printingNo == 0) {
+                cout << "\r  run " << run + 1 << "/" << nRuns << "  "
+                    << 100 * (step + 1) / nsweeps << "%" << "\033[K" << flush;
                 }
-        }
-        cout<<endl;
+            }
+            cout<<endl;
 
-        string filename = "data/met_results/L" + to_string(L) + "/nsweeps" +
-                  to_string(nsweeps) + "/T" +
-                  rounding(T, 5) + ".dat";
-        fs::create_directories(fs::path(filename).parent_path());
-        ofstream file(filename);
+            ostringstream rn;
+            rn << "run" << setw(3) << setfill('0') << run << ".dat";
 
-        for (int step = 0; step < nsweeps; step++){
-            file << step << " " << mags[step] << " " << ens[step] << "\n";
-        }
-        //string per=rounding(100*T/nT,3);
-        cout << "finished T = " << T << endl;
-    
+            string filename = "data/met_results/L" + to_string(L) +
+                              "/nsweeps" + to_string(nsweeps) +
+                              "/T" + rounding(T, 5) + "/" + rn.str();
+            fs::create_directories(fs::path(filename).parent_path());
+            ofstream file(filename);
+            
+            for (int step = 0; step < nsweeps; step++)
+                file << step << " " << mags[step] << " " << ens[step] << "\n";
+
+            }
+        cout << endl;
     }
     return 0;
 }

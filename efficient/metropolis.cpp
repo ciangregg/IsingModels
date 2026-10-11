@@ -166,7 +166,7 @@ void writeMetadata(const string& dir, int nT, double Tmin, double Tmax,
 
 
 int main() {
-    const int nT=20; // number of temps in the range
+    const int nT=40; // number of temps in the range
     const int nsweeps = 10000;
     const int nRuns = 10;
 

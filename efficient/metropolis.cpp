@@ -3,7 +3,7 @@
 #include <cmath>
 #include <random>
 #include <vector>
-#include <fstream> // output
+#include <fstream> // output to files
 #include <sstream> // for string
 #include <iomanip> // for string
 #include <filesystem> // similar to os in python
@@ -16,8 +16,7 @@ namespace fs = std::filesystem;
 
 #define L 100
 #define N (L*L)
-#define XNN 1
-#define YNN L
+
 
 // variables
 const int J = 1;
@@ -26,25 +25,25 @@ int s[N];
 double prob[5];
 double T;
 const double Tc= 2 * abs(J) / log(1 + sqrt(2));
-int curM, curE;      // running totals
+int curM, curE;      // current E/M as running totals
 
+// functions
 
-// Pseudo-Random Number Generator
-// Randomn numbers are harder in C than python
+// Pseudo-Random Number Generators
 
-//first attempt
+// my first attempt had only 101 numbers and barely explored the lattice
 /*double drandom(){
-    double randomNum100 = rand() % 101;
-    return randomNum100/100;
+    return (rand() % 101)/100.0;
 }*/
 
-// mt19937 "Mersenne Twister" a pseduo rand number gen with a seed 
-// same PRNG as np.random()
+// mt19937 "Mersenne Twister" a standard PRNG
+// same PRNG as np.random(), from what i can tell
+
 const unsigned int baseSeed = 13;
 
 mt19937 gen;
-uniform_real_distribution<double> dist(0.0, 1.0); // for random no
-uniform_int_distribution<int> siteDist(0, N - 1); // for radnom sites
+uniform_real_distribution<double> dist(0.0, 1.0); // for random numbers
+uniform_int_distribution<int> siteDist(0, N - 1); // for radnom sites positions
 
 double drandom() {
      return dist(gen); 
@@ -60,13 +59,11 @@ void seedRun(int t, int run) {
     gen.seed(seq);
 }
 
-// comare other PRNGs
+// we could compare other PRNGs later
 
-
-
-// Functions 
 
 // initialising for each temp/run
+
 // calculate the exp energy difference for each Temp, to avoid calculating exp each sweep 
 void initialiseProb() {
     for (int i = 2; i < 5; i += 2) {
@@ -89,18 +86,22 @@ void initialiseSpins(){
 
 // core metropolis sweep algorithm
 
+// the set up is helical in x and peridoic in y
 void sweep() {
     for (int k = 0; k < N; k++) {
         int i = randSite();
         int nn, sum;
-
-        if ((nn = i + XNN) >= N) nn -= N;
+        // x direction wraps last site to first site
+        if ((nn = i + 1) >= N){nn -= N;}
         sum = s[nn];
-        if ((nn = i - XNN) < 0) nn += N;
+        // x direction wraps first site to last site
+        if ((nn = i - 1) < 0) {nn += N;}
         sum += s[nn];
-        if ((nn = i + YNN) >= N) nn -= N;
+         // y direction wraps last site to first site
+        if ((nn = i + L) >= N) {nn -= N;}
         sum += s[nn];
-        if ((nn = i - YNN) < 0) nn += N;
+        // y direction wraps first site to last site
+        if ((nn = i - L) < 0) {nn += N;}
         sum += s[nn];
 
         int delta = sum * s[i];
@@ -116,19 +117,17 @@ void sweep() {
 // full calculation of E and M
 int magnetisation(){
     int M=0;
-    for (int i = 0; i < N; i++) {
-        M += s[i];
-    }
+    for (int i = 0; i < N; i++) {M += s[i];}
     return M;
 }
 
 int energy(){
     int E=0;
     for(int i=0; i<N; i++) {
-        int right = i + XNN;
+        int right = i + 1;
         if(right>= N){right-=N;}
 
-        int up = i + YNN;
+        int up = i + L;
         if(up>= N){up-=N;}
 
         E -= J*s[i]*(s[right]+s[up]);
@@ -162,6 +161,7 @@ void writeMetadata(const string& dir, int nT, double Tmin, double Tmax,
       << "seeding seed_seq{baseSeed, t_index, run_index}\n"
       << "T_i = Tmin + (Tmax-Tmin)*i/(nT-1)\n";
 }
+
 
 
 

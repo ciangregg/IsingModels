@@ -107,7 +107,8 @@ plt.tight_layout()
 plt.savefig(OBS_DIR / f"met_tau_L{L}_nsweeps{nsweeps}_nruns{n_runs}.pdf")
 plt.close()
 
-##################
+################## py erroers
+
 def get_tauint(data_list, names, ens, S=2.0):
     o = pe.Obs(data_list, names)
     o.gamma_method(S=S)
@@ -140,7 +141,6 @@ for i, T in enumerate(temps):
 
     print(f"T={T:.3f}  tau|m|={tau_mean[i,0]:.2f}+/-{tau_std[i,0]:.2f} (W={win[i,0]})  "
           f"tau_e={tau_mean[i,1]:.2f}+/-{tau_std[i,1]:.2f} (W={win[i,1]})")
-    
     
     
 fig, ax = plt.subplots(1, 2, figsize=(10, 4))

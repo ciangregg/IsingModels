@@ -177,7 +177,7 @@ int main() {
 
     vector<int> mags(nsweeps), ens(nsweeps);
 
-    const string baseDir = "data/met_results/L" + to_string(L) +
+    const string baseDir = "data/met_results/L" + to_string(L) +"/nt" + rounding(nT, 0) + 
                         "/nsweeps" + to_string(nsweeps);
     writeMetadata(baseDir, nT, Tmin, Tmax, nRuns, nsweeps);
     

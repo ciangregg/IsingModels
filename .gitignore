@@ -13,4 +13,6 @@ Wolff_Algorithm/cache/
 
 # currently ignoring it causes theres so many files
 efficient/data/met_results/
+efficient/data/wolff_results/
+
 efficient/test.ipynb

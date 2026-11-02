@@ -180,11 +180,20 @@ void writeMetadata(const string& dir, int nT, double Tmin, double Tmax,
       << "T_i = Tmin + (Tmax-Tmin)*i/(nT-1)\n";
 }
 
+double pilotMeanClusterSize(int pilotUpdates) {
+    long long totalClusterSites = 0;
+
+    for (int step = 0; step < pilotUpdates; ++step) {
+        totalClusterSites += wolffStep();
+    }
+
+    return static_cast<double>(totalClusterSites) / pilotUpdates;
+}
 
 
 int main() {
-    const int nT=40; // number of temps in the range
-    const int nsweeps = 10000;
+    const int nT=10; // number of temps in the range
+    const int nsweeps = 10000;// ive confused sweeps and steps
     const int nRuns = 10;
 
     const double Tmin=1.8;
@@ -192,7 +201,7 @@ int main() {
 
     int  printingNo=nsweeps/100;
 
-    vector<int> mags(nsweeps), ens(nsweeps), sizes(nsweeps);
+    vector<int> mags, ens, sizes;
     clusterStack.reserve(N);
 
     const string baseDir = "data/wolff_results/L" + to_string(L)+"/nt" 
@@ -203,24 +212,49 @@ int main() {
     // nT temps loop
     for (int t = 0; t < nT; t++) {
         T = Tmin + (Tmax - Tmin) * t / (nT - 1);
-        padd= 1- exp(-(2.0 * J )/ T);
+        padd = 1.0 - exp(-(2.0 * J) / T);
 
-        cout << "T=" << T << " , "<< t+1<<"/"<<nT <<endl;
+        // Pilot run for this temperature
+        seedRun(t, nRuns);  // use a seed index not used by production runs
+        initialiseSpins();
+        curM = magnetisation();
+
+        //runForEquivalentSweeps(1000);  // discard pilot burn-in
+        double nbar = pilotMeanClusterSize(10000);
+
+        long long nsweeps_eq = static_cast<long long>(
+            llround(static_cast<double>(nsweeps) * N / nbar)
+        );
+
+        cout << "T=" << T << " , "<< t+1<<"/"<<nT <<endl
+            << "  nbar=" << nbar
+            << "  equiv Wolff steps=" << nsweeps_eq
+            << "  target equivalent sweeps=" << nsweeps << '\n';
+
 
         for (int run=0; run < nRuns; run++){
             // new seed for RNG 
-            seedRun(t, run);  
+            seedRun(t, run);
             initialiseSpins();
     
-            curM = magnetisation();  
-            
-            for(int step = 0; step < nsweeps; step++) {
-                sizes[step] = wolffStep();
-                mags[step] = curM;
-                ens[step]  = energy();
-                if ((step + 1) % printingNo == 0) {
-                cout << "\r  run " << run + 1 << "/" << nRuns << "  "
-                    << 100 * (step + 1) / nsweeps << "%" << "\033[K" << flush;
+            curM = magnetisation();
+
+            vector<int> mags, ens, sizes;
+            mags.reserve(nsweeps_eq);
+            ens.reserve(nsweeps_eq);
+            sizes.reserve(nsweeps_eq);
+
+            for (long long step = 0; step < nsweeps_eq; ++step) {
+                int clusterSize = wolffStep();
+
+                sizes.push_back(clusterSize);
+                mags.push_back(curM);
+                ens.push_back(energy()); // this is a bottle neck next fix
+
+                if ((step + 1) % 1000 == 0 || step + 1 == nsweeps_eq) {
+                    cout << "\r  run " << run + 1 << "/" << nRuns << "  "
+                        << 100.0 * (step + 1) / nsweeps_eq
+                        << "%" << "\033[K" << flush;
                 }
             }
             cout<<endl;
@@ -231,10 +265,13 @@ int main() {
             string filename = baseDir  + "/T" + rounding(T, 5) + "/" + rn.str();
             fs::create_directories(fs::path(filename).parent_path());
             ofstream file(filename);
-            
-            for (int step = 0; step < nsweeps; step++)
-                file << step << " " << mags[step] << " " << ens[step] << " " << sizes[step] << "\n";
+
+            for (long long step = 0; step < nsweeps_eq; ++step) {
+                file << step << " " << mags[step] << " "
+                    << ens[step] << " " << sizes[step]<< " " << nsweeps_eq << '\n';
             }
+        }
+
         cout << endl;
     }
     return 0;

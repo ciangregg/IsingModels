@@ -15,4 +15,7 @@ Wolff_Algorithm/cache/
 efficient/data/met_results/
 efficient/data/wolff_results/
 
+efficient/cache/
+
 efficient/test.ipynb
+efficient/testV2.ipynb

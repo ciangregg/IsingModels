@@ -147,16 +147,17 @@ string rounding(double x, int digits = 3) {
 
 // meta data
 void writeMetadata(const string& dir, int nT, double Tmin, double Tmax,
-                   int nRuns, int nsweeps) {
+                   int nRuns, int nsweeps, int burnInSweeps) {
     fs::create_directories(dir);
     ofstream m(dir + "/metadata.txt");
-    m << "L "        << L        << "\n"
-      << "nT "       << nT       << "\n"
-      << "Tmin "     << Tmin     << "\n"
-      << "Tmax "     << Tmax     << "\n"
-      << "nRuns "    << nRuns    << "\n"
-      << "nsweeps "  << nsweeps  << "\n"
-      << "baseSeed " << baseSeed << "\n"
+    m << "L "             << L             << "\n"
+      << "nT "            << nT            << "\n"
+      << "Tmin "          << Tmin          << "\n"
+      << "Tmax "          << Tmax          << "\n"
+      << "nRuns "         << nRuns         << "\n"
+      << "nsweeps "       << nsweeps       << "\n"
+      << "burnInSweeps "  << burnInSweeps  << "\n"
+      << "baseSeed "      << baseSeed      << "\n"
       << "engine mt19937\n"
       << "seeding seed_seq{baseSeed, t_index, run_index}\n"
       << "T_i = Tmin + (Tmax-Tmin)*i/(nT-1)\n";
@@ -166,8 +167,9 @@ void writeMetadata(const string& dir, int nT, double Tmin, double Tmax,
 
 
 int main() {
-    const int nT=40; // number of temps in the range
+    const int nT = 10;
     const int nsweeps = 10000;
+    const int burnInSweeps = 200;
     const int nRuns = 10;
 
     const double Tmin=1.8;
@@ -177,48 +179,104 @@ int main() {
 
     vector<int> mags(nsweeps), ens(nsweeps);
 
-    const string baseDir = "data/met_results/L" + to_string(L) +"/nt" + rounding(nT, 0) + 
-                        "/nsweeps" + to_string(nsweeps);
-    writeMetadata(baseDir, nT, Tmin, Tmax, nRuns, nsweeps);
-    
-    // nT temps loop
+    const string baseDir = "data/met_results/L" + to_string(L) +
+                           "/nt" + rounding(nT, 0) +
+                           "/nsweeps" + to_string(nsweeps);
+
+    writeMetadata(baseDir, nT, Tmin, Tmax, nRuns, nsweeps, burnInSweeps);
+
+    // nT temperatures loop
     for (int t = 0; t < nT; t++) {
         T = Tmin + (Tmax - Tmin) * t / (nT - 1);
+
         initialiseProb();
-        cout << "T=" << T << " , "<< t+1<<"/"<<nT <<endl;
+
+        cout << "T=" << T << " , " << t + 1 << "/" << nT << endl;
         cout << "prob[2]=" << prob[2] << "  prob[4]=" << prob[4] << endl;
 
-        for (int run=0; run < nRuns; run++){
-            // new seed for RNG 
-            seedRun(t, run);  
+        for (int run = 0; run < nRuns; run++) {
+
+            // New seed for each temperature/run
+            seedRun(t, run);
             initialiseSpins();
 
-            curM = magnetisation();  
-            curE = energy(); 
+            curM = magnetisation();
+            curE = energy();
 
-            for(int step = 0; step < nsweeps; step++) {
+            // ----------------------------------
+            // BURN-IN
+            // ----------------------------------
+
+            // Only save the burn-in trace for run 0,
+            // but perform burn-in for every run.
+            ofstream burninFile;
+
+            if (run == 0) {
+                string burninFilename =
+                    baseDir + "/T" + rounding(T, 5) + "/burnin_run000.dat";
+
+                fs::create_directories(
+                    fs::path(burninFilename).parent_path()
+                );
+
+                burninFile.open(burninFilename);
+
+                burninFile << "# sample M E\n";
+            }
+
+            for (int step = 0; step < burnInSweeps; step++) {
                 sweep();
+
+                if (run == 0) {
+                    burninFile << step << " " << curM << " " << curE << "\n";
+                }
+            }
+
+            if (run == 0) {
+                burninFile.close();
+            }
+
+            // ----------------------------------
+            // PRODUCTION
+            // ----------------------------------
+
+            for (int step = 0; step < nsweeps; step++) {
+                sweep();
+
                 mags[step] = curM;
-                ens[step]  = curE;
+                ens[step] = curE;
+
                 if ((step + 1) % printingNo == 0) {
-                cout << "\r  run " << run + 1 << "/" << nRuns << "  "
-                    << 100 * (step + 1) / nsweeps << "%" << "\033[K" << flush;
+                    cout << "\r  run " << run + 1 << "/" << nRuns << "  "
+                         << 100 * (step + 1) / nsweeps << "%"
+                         << "\033[K" << flush;
                 }
             }
             cout<<endl;
 
+            // Save production data in the original format
             ostringstream rn;
             rn << "run" << setw(3) << setfill('0') << run << ".dat";
 
-            string filename = baseDir + "/T" + rounding(T, 5) + "/" + rn.str();
-            fs::create_directories(fs::path(filename).parent_path());
-            ofstream file(filename);
-            
-            for (int step = 0; step < nsweeps; step++)
-                file << step << " " << mags[step] << " " << ens[step] << "\n";
+            string filename =
+                baseDir + "/T" + rounding(T, 5) + "/" + rn.str();
 
+            fs::create_directories(
+                fs::path(filename).parent_path()
+            );
+
+            ofstream file(filename);
+
+            file << "# sample M E\n";
+
+            for (int step = 0; step < nsweeps; step++) {
+                file << step << " " << mags[step] << " "
+                     << ens[step] << "\n";
             }
+        }
+
         cout << endl;
     }
+
     return 0;
 }

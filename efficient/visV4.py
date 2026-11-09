@@ -15,7 +15,6 @@ from scipy.special import ellipk
 L = 100
 N = L * L
 nsweeps = 10000                      # sweep-equivalents per run (used in folder name)
-
 DATA_ROOT = Path("efficient/data")   
 OUT_DIR = Path("efficient/figs/cmp")
 OUT_DIR.mkdir(parents=True, exist_ok=True)
@@ -32,9 +31,9 @@ CACHE_VERSION = "blocksum_v1"        # invalidate caches from the old Wolff form
 # n_eq is in SWEEP-EQUIVALENTS (1 sweep = N spin updates).
 # dx = x-offset of the markers, as a fraction of the T grid spacing
 ALGOS = {
-    "met": dict(folder="met_results", subdir="nt10", n_eq=200, label="Metropolis",
+    "met": dict(folder="met_results", subdir="nt50", n_eq=200, label="Metropolis",
                 color="tab:blue", marker="o", dx=0, fixed_size=True),
-    "wolff": dict(folder="wolff_results", subdir="nt10", n_eq=200, label="Wolff",
+    "wolff": dict(folder="wolff_results", subdir="nt50", n_eq=200, label="Wolff",
                   color="tab:red", marker="s", dx=+0, fixed_size=False),
 }
 
@@ -194,7 +193,8 @@ def plot_equilibration(data, T_targets=(1.8, 2.1, Tc, 2.8)):
 
             # Full production traces from every independent run.
             for run in range(d["n_runs"]):
-                xp = burnin_sweeps + sweep_clock(d["S"][idx][run])
+                xp = sweep_clock(d["S"][idx][run])
+                #xp = burnin_sweeps + sweep_clock(d["S"][idx][run])
                 lab = cfg["label"] if run == 0 else None
                 ax[2, j].plot(
                     xp, np.abs(d["M"][idx][run]) / N,
@@ -206,13 +206,14 @@ def plot_equilibration(data, T_targets=(1.8, 2.1, Tc, 2.8)):
                 )
 
             # n_eq is an additional cutoff within production, after C++ burn-in.
-            cutoff = burnin_sweeps + cfg["n_eq"]
+            #cutoff = burnin_sweeps + cfg["n_eq"]
+            cutoff = cfg["n_eq"]
             ax[2, j].axvline(cutoff, color=cfg["color"], ls="--", lw=1.1)
             ax[3, j].axvline(cutoff, color=cfg["color"], ls="--", lw=1.1)
 
         ax[0, j].set_title(f"T = {T:.3f}")
         for r in range(4):
-            ax[r, j].set_xscale("log")
+            ax[r, j].set_xlim(left=0) 
             ax[r, j].grid(alpha=0.2)
             ax[r, j].set_xlabel("sweep-equivalents")
         ax[0, j].set_ylabel("burn-in |m|")
@@ -224,7 +225,8 @@ def plot_equilibration(data, T_targets=(1.8, 2.1, Tc, 2.8)):
     ax[2, 0].legend(fontsize=7)
     fig.suptitle(
         "Burn-in (run 0; dotted = production starts) and production "
-        "(all runs; dashed = proposed cutoff)"
+        "(dashed = n_eq cutoff, production clock starts at 0)”"
+        #"(all runs; dashed = proposed cutoff)"
     )
     plt.tight_layout()
     plt.savefig(OUT_DIR / f"cmp_equilibration_L{L}_nsweeps{nsweeps}.pdf")
@@ -456,3 +458,4 @@ if __name__ == "__main__":
     plot_pulls(results)
     plot_tau(results)
     print("done")
+    

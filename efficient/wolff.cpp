@@ -9,6 +9,7 @@
 #include <iomanip> // for string
 #include <filesystem> // similar to os in python
 
+#include <gsl/gsl_rng.h>
 
 using namespace std;
 namespace fs = std::filesystem;
@@ -44,8 +45,8 @@ const int pilotMeasSweeps = 100;  // pilot nbar measurement, in sweep-equivalent
 
 
 // mt19937 "Mersenne Twister" a standard PRNG
-// same PRNG as np.random(), from what i can tell
-
+// same PRNG as np.random()
+/*
 const unsigned int baseSeed = 13;
 
 mt19937 gen;
@@ -68,9 +69,33 @@ void seedRun(int stage, int t, int run) {
                  (unsigned int)t, (unsigned int)run};
     gen.seed(seq);
 }
-
+*/
 // we could compare other PRNGs later
 
+// GSL 
+const unsigned int baseSeed = 13;
+
+gsl_rng* r = nullptr;
+
+double drandom() {
+    return gsl_rng_uniform(r);  // Uniform in [0, 1)
+}
+
+int randSite() {
+    return gsl_rng_uniform_int(r, N); // Integer in [0, N)
+}
+
+void seedRun(int stage, int t, int run) {
+
+    unsigned long seed =
+        baseSeed
+        + 1000003UL * (unsigned long)L //1,000,003 unsigned int less probelmatic.
+        + 1000033UL * (unsigned long)stage
+        + 1000037UL * (unsigned long)t
+        + 1000039UL * (unsigned long)run;
+
+    gsl_rng_set(r, seed);
+}
 
 // initialising for each temp/run
 
@@ -258,12 +283,23 @@ void writeHeader(ofstream& f, const char* kind, int run, int kT, double nbar,
 
 
 int main() {
-    const int nT=10; // number of temps in the range
+    const int nT=4; // number of temps in the range
     const int nsweeps = 10000; // samples per run, each ~N flipped spins (one metropolis-sweep equivalent)
     const int nRuns = 10;
 
     const double Tmin=1.8;
     const double Tmax=2.8;
+
+    //GSL
+    gsl_rng_env_setup();
+
+    r = gsl_rng_alloc(gsl_rng_mt19937);
+    r = gsl_rng_alloc(gsl_rng_ranlxs0); /// RANLUX
+    r = gsl_rng_alloc(gsl_rng_ranlxs1); //better RANLUX
+    r = gsl_rng_alloc(gsl_rng_ranlxs2); //best RANLUX
+    r = gsl_rng_alloc(gsl_rng_ranlxd1); //Double-precision RANLUX
+    
+    seedRun(0, 0, 0);
 
     clusterStack.reserve(N);
 

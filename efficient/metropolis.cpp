@@ -167,7 +167,7 @@ void writeMetadata(const string& dir, int nT, double Tmin, double Tmax,
 
 
 int main() {
-    const int nT = 10;
+    const int nT = 50;
     const int nsweeps = 10000;
     const int burnInSweeps = 200;
     const int nRuns = 10;

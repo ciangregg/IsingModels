@@ -16,8 +16,7 @@ efficient/data/met_results/
 efficient/data/wolff_results/
 
 efficient/cache/
-efficient/__pycache__
-
+efficient/__pycache__/visV4.cpython-313.pyc
 
 efficient/troubleShooting/data/
 

@@ -1,0 +1,2 @@
+# temperatures for the VS Code debug run (5dp max)
+2.26919

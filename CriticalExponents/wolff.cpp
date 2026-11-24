@@ -1,5 +1,6 @@
-// copied from efficient/wolff.cpp
+// Wolff for fss
 #include <iostream>
+#include <cstdint>
 #include <cmath>
 #include <random>
 #include <vector>
@@ -15,7 +16,6 @@ using namespace std;
 namespace fs = std::filesystem;
 
 // defines
-
 #ifndef L
 #define L 100   // override at compile time with -DL=...
 #endif
@@ -54,16 +54,50 @@ int randSite() {
     return gsl_rng_uniform_int(r, N); // Integer in [0, N)
 }
 
-void seedRun(int stage, int t, int run) {
+// seeding
+// GSL's RANLUX uses the lowest 31 bits of the seed
 
-    unsigned long seed =
-        baseSeed
-        + 1000003UL * (unsigned long)L //1,000,003 unsigned int less probelmatic.
-        + 1000033UL * (unsigned long)stage
-        + 1000037UL * (unsigned long)t
-        + 1000039UL * (unsigned long)run;
+//   bits 0     stage  (0 = pilot, 1 = production)
+//   bits 1-8   run    
+//   bits 9-28  tKey   (round(T*1e5), so T < 10.48576)
 
+// baseSeed and L are mixed in with an XOR, which keeps seeds unique within one L.
+// tKey is the same 5dp value as the folder name, so a seed depends only on
+// (L, T, stage, run), not on the temps file or the order temperatures are run in.
+
+const int maxRuns = 256;
+const unsigned int maxTKey = 1u << 20;
+
+unsigned int tempKey(double temp) {
+    return (unsigned int)llround(temp * 1e5);
+}
+
+// the scrambler
+uint64_t splitmix64(uint64_t x) {
+    x += 0x9E3779B97F4A7C15ULL;
+    x = (x ^ (x >> 30)) * 0xBF58476D1CE4E5B9ULL;
+    x = (x ^ (x >> 27)) * 0x94D049BB133111EBULL;
+    return x ^ (x >> 31);
+}
+
+unsigned long makeSeed(int stage, unsigned int tKey, int run) {
+    // packing: bits 0,stage(0 = pilot, 1 = production), bits 1-8 run, bits 9-28 temps 
+    const uint64_t packed = ((uint64_t)tKey << 9) | ((uint64_t)run << 1) | (uint64_t)stage;
+    //  scramble (baseSeed, L), using splitmix64
+    const uint64_t mix = splitmix64(((uint64_t)baseSeed << 32) | (uint64_t)L);
+    //  combine with XOR, keep 31 bits
+    return (unsigned long)((packed ^ mix) & 0x7FFFFFFFULL);
+}
+
+unsigned long seedRun(int stage, unsigned int tKey, int run) {
+    unsigned long seed = makeSeed(stage, tKey, run);
+    if (seed == 0) {   // GSL would silently turn 0 into 1
+        cerr << "seed came out as 0 (stage " << stage << ", tKey " << tKey
+             << ", run " << run << "); change baseSeed\n";
+        exit(1);
+    }
     gsl_rng_set(r, seed);
+    return seed;
 }
 
 // initialising for each temp/run
@@ -184,34 +218,36 @@ string rounding(double x, int digits = 3) {
     return s.str();
 }
 
-// meta data
-void writeMetadata(const string& dir, int nT, double Tmin, double Tmax,
-                   int nRuns, int nsweeps) {
-    fs::create_directories(dir);
-    ofstream m(dir + "/metadata.txt");
+// per-temperature metadata, written after all runs at this T have finished
+// (so the runner can treat "meta.txt exists" as "this T is done")
+void writeTMeta(const string& tDir, unsigned int tKey, int nRuns, int nsamples,
+                int kT, double nbar) {
+    ofstream m(tDir + "/meta.txt");
     m << "L "        << L        << "\n"
-      << "nT "       << nT       << "\n"
-      << "Tmin "     << Tmin     << "\n"
-      << "Tmax "     << Tmax     << "\n"
+      << "N "        << N        << "\n"
+      << "T "        << rounding(T, 5) << "\n"
       << "nRuns "    << nRuns    << "\n"
-      << "nsweeps "  << nsweeps  << "  (samples per run, ~N flipped spins each)\n"
+      << "nsamples " << nsamples << "  (samples per run, ~N flipped spins each)\n"
+      << "kT "       << kT       << "  (wolff steps per sample)\n"
+      << "nbar "     << nbar     << "\n"
       << "burnInSamples "   << burnInSamples   << "\n"
       << "pilotEqSweeps "   << pilotEqSweeps   << "\n"
       << "pilotMeasSweeps " << pilotMeasSweeps << "\n"
+      << "start "    << ((T < Tc) ? "cold" : "hot") << "\n"
+      << "engine gsl_" << gsl_rng_name(r) << "\n"
       << "baseSeed " << baseSeed << "\n"
-      << "engine mt19937\n"
-      << "seeding seed_seq{baseSeed, L, stage, t_index, run_index}  (stage 0 = pilot, 1 = production)\n"
-      << "T_i = Tmin + (Tmax-Tmin)*i/(nT-1)\n"
-      << "data columns: sample M E blockClusterSum  (M, E are totals, not per spin)\n"
-      << "# per-temperature calibration: T kT nbar\n";
+      << "tKey "     << tKey << "  (round(T*1e5))\n"
+      << "seeding (tKey<<9 | run<<1 | stage) XOR splitmix64(baseSeed<<32 | L), lowest 31 bits\n"
+      << "pilotSeed " << makeSeed(0, tKey, 0) << "\n"
+      << "columns sample M E blockClusterSum  (M, E are totals, not per spin)\n";
 }
 
 // pilot calibration for one temperature
 // equilibrate and measure the mean cluster size nbar, both budgeted in flipped
 // spins so every T gets similar effort, then freeze kT = round(N / nbar).
 // the pilot's spin state is thrown away, production runs reseed and reinitialize.
-void calibrate(int t, double& nbar, int& kT) {
-    seedRun(0, t, 0);
+void calibrate(unsigned int tKey, double& nbar, int& kT) {
+    seedRun(0, tKey, 0);
     initialiseSpins();
     curM = magnetisation();
     curE = energy();
@@ -235,13 +271,13 @@ void calibrate(int t, double& nbar, int& kT) {
 
 // self-describing header for a data file
 void writeHeader(ofstream& f, const char* kind, int run, int kT, double nbar,
-                 int t, long long nrows) {
+                 unsigned long seed, long long nrows) {
     f << "# " << kind << "\n"
       << "# L " << L << "\n"
       << "# N " << N << "\n"
       << "# T " << rounding(T, 5) << "\n"
       << "# run " << run << "\n"
-      << "# seed_seq {" << baseSeed << ", " << L << ", 1, " << t << ", " << run << "}\n"
+      << "# seed " << seed << "   (gsl_" << gsl_rng_name(r) << ")\n"
       << "# start " << ((T < Tc) ? "cold" : "hot") << "\n"
       << "# kT " << kT << "   (wolff steps per sample)\n"
       << "# nbar " << nbar << "\n"
@@ -251,58 +287,97 @@ void writeHeader(ofstream& f, const char* kind, int run, int kT, double nbar,
 }
 
 
-int main() {
-    const int nT=4; // number of temps in the range
-    const int nsweeps = 10000; // samples per run, each ~N flipped spins (one metropolis-sweep equivalent)
-    const int nRuns = 10;
+// read temperatures, one per line, '#' comments and blank lines ignored
+vector<double> readTemps(const string& fname) {
+    ifstream f(fname);
+    if (!f) {
+        cerr << "cannot open temps file " << fname << endl;
+        exit(1);
+    }
+    vector<double> temps;
+    string line;
+    while (getline(f, line)) {
+        size_t c = line.find('#');
+        if (c != string::npos) line = line.substr(0, c);
+        istringstream ss(line);
+        double x;
+        if (ss >> x) {
+            if (x <= 0 || tempKey(x) >= maxTKey) {
+                cerr << "temperature " << x << " out of range (0, 10.48576)\n";
+                exit(1);
+            }
+            // folder names and seeds use 5dp, so the temperature must be exactly 5dp
+            if (fabs(x * 1e5 - llround(x * 1e5)) > 1e-6) {
+                cerr << "temperature " << setprecision(10) << x
+                     << " has more than 5 decimal places; round it to 5dp\n";
+                exit(1);
+            }
+            temps.push_back(x);
+        }
+    }
+    return temps;
+}
 
-    const double Tmin=1.8;
-    const double Tmax=2.8;
+
+int main(int argc, char* argv[]) {
+
+    if (argc != 5) {
+        cerr << "usage: " << argv[0] << " <temps_file> <nRuns> <nsamples> <outdir>\n";
+        return 1;
+    }
+    const vector<double> temps = readTemps(argv[1]);
+    const int nRuns    = stoi(argv[2]);
+    const int nsamples = stoi(argv[3]); // samples per run, each ~N flipped spins (one metropolis-sweep equivalent)
+    const string outDir = argv[4];
+
+    if (temps.empty()) {
+    cerr << "no temperatures found in " << argv[1] << endl;
+    return 1;
+    }
+    if (nRuns < 1 || nRuns > maxRuns) {
+        cerr << "nRuns must be between 1 and " << maxRuns << ", got " << nRuns << endl;
+        return 1;
+    }
+    if (nsamples < 1) {
+        cerr << "nsamples must be >= 1, got " << nsamples << endl;
+        return 1;
+    }
 
     //GSL
-    gsl_rng_env_setup();
-
-    r = gsl_rng_alloc(gsl_rng_mt19937);
+    r = gsl_rng_alloc(gsl_rng_ranlxd1); // double-precision RANLUX
+    //r = gsl_rng_alloc(gsl_rng_mt19937);
     //r = gsl_rng_alloc(gsl_rng_ranlxs0); /// RANLUX
     //r = gsl_rng_alloc(gsl_rng_ranlxs1); //better RANLUX
     //r = gsl_rng_alloc(gsl_rng_ranlxs2); //best RANLUX
-    //r = gsl_rng_alloc(gsl_rng_ranlxd1); //Double-precision RANLUX
-    
-    seedRun(0, 0, 0);
 
     clusterStack.reserve(N);
 
-    const string baseDir = "data/wolff_results/L" + to_string(L)+"/nt" 
-        + rounding(nT, 0) +"/nsweeps" + to_string(nsweeps);
-    writeMetadata(baseDir, nT, Tmin, Tmax, nRuns, nsweeps);
-    
-    
-    // nT temps loop
+    const string baseDir = outDir + "/L" + to_string(L) + "/nsamples" + to_string(nsamples);
+    const int nT = temps.size();
+
+    // temps loop
     for (int t = 0; t < nT; t++) {
-        T = Tmin + (Tmax - Tmin) * t / (nT - 1);
+        T = temps[t];
         padd = 1.0 - exp(-(2.0 * J) / T);
+        const unsigned int tKey = tempKey(T);
 
         // pilot: freeze kT (wolff steps per sample) for this temperature
         double nbar;
         int kT;
-        calibrate(t, nbar, kT);
+        calibrate(tKey, nbar, kT);
 
-        cout << "T=" << T << " , "<< t+1<<"/"<<nT <<endl
+        cout << "L=" << L << "  T=" << T << " , " << t + 1 << "/" << nT << endl
             << "  nbar=" << nbar
             << "  kT=" << kT
-            << "  samples/run=" << nsweeps << '\n';
+            << "  samples/run=" << nsamples << '\n';
 
-        {
-            ofstream m(baseDir + "/metadata.txt", ios::app);
-            m << rounding(T, 5) << " " << kT << " " << nbar << "\n";
-        }
-
-        const string tDir = baseDir + "/T" + rounding(T, 5);
+        // folder name built from tKey so it always matches the seed
+        const string tDir = baseDir + "/T" + rounding(tKey / 1e5, 5);
         fs::create_directories(tDir);
 
         for (int run=0; run < nRuns; run++){
             // new seed for RNG 
-            seedRun(1, t, run);
+            const unsigned long seed = seedRun(1, tKey, run);
             initialiseSpins();
     
             curM = magnetisation();
@@ -327,7 +402,7 @@ int main() {
             }
             if (run == 0) {
                 ofstream bf(tDir + "/burnin_run000.dat");
-                writeHeader(bf, "burn-in trace (not used for statistics)", run, kT, nbar, t, burnInSamples);
+                writeHeader(bf, "burn-in trace (not used for statistics)", run, kT, nbar, seed, burnInSamples);
                 for (int b = 0; b < burnInSamples; ++b) {
                     bf << b << " " << bM[b] << " " << bE[b] << " " << bS[b] << '\n';
                 }
@@ -335,12 +410,12 @@ int main() {
 
             // production: one sample every kT wolff steps
             vector<int> mags, ens, sums;
-            mags.reserve(nsweeps);
-            ens.reserve(nsweeps);
-            sums.reserve(nsweeps);
+            mags.reserve(nsamples);
+            ens.reserve(nsamples);
+            sums.reserve(nsamples);
 
-            const int printEvery = max(1, nsweeps / 100);
-            for (int smp = 0; smp < nsweeps; ++smp) {
+            const int printEvery = max(1, nsamples / 100);
+            for (int smp = 0; smp < nsamples; ++smp) {
                 int blockSum = 0;
                 for (int k = 0; k < kT; ++k) blockSum += wolffStep();
 
@@ -348,9 +423,9 @@ int main() {
                 mags.push_back(curM);
                 ens.push_back(curE);
 
-                if ((smp + 1) % printEvery == 0 || smp + 1 == nsweeps) {
+                if ((smp + 1) % printEvery == 0 || smp + 1 == nsamples) {
                     cout << "\r  run " << run + 1 << "/" << nRuns << "  "
-                        << 100.0 * (smp + 1) / nsweeps
+                        << 100.0 * (smp + 1) / nsamples
                         << "%" << "\033[K" << flush;
                 }
             }
@@ -367,15 +442,20 @@ int main() {
 
             string filename = tDir + "/" + rn.str();
             ofstream file(filename);
-            writeHeader(file, "production samples", run, kT, nbar, t, nsweeps);
+            writeHeader(file, "production samples", run, kT, nbar, seed, nsamples);
 
-            for (int smp = 0; smp < nsweeps; ++smp) {
+            for (int smp = 0; smp < nsamples; ++smp) {
                 file << smp << " " << mags[smp] << " "
                     << ens[smp] << " " << sums[smp] << '\n';
             }
         }
 
+
+        // written last: marks this temperature as complete
+        writeTMeta(tDir, tKey, nRuns, nsamples, kT, nbar);
         cout << endl;
     }
+
+    gsl_rng_free(r);
     return 0;
 }

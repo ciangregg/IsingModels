@@ -3,12 +3,83 @@ An ongoing year-long project supervised by Patrick Fritzch, Hitachi Assistant Pr
 
 [Check out the proposal here](pdfs/Proposal.pdf)
 
-# Table of Contents
-...
+# Structure
+```
+CriticalExponents/               # FSS with wolff sims in cpp
+efficient/                       # work on implementint Metropolis and Wolff in cpp
+IsingWorkProbablisticComp/       #relevant files from summer work on MCMC
+pdfs/                            # final work
+Wolff_Algorithm/                 # cluster algorithms study
+```
 
-<br><br><br><br><br><br><br><br>
+# Current Progress on Exponents
+In the 2D Ising Model we want to extract the critical exponents:
 
-### extras
-My favourite quote from Alan Sokal in his introduction to his course on Monte Carlo Methods in Statistical Mechanics, 
+$
+\begin{align}
+    &\quad\alpha=0,\qquad\beta=\frac{1}{8},\qquad\gamma=\frac{7}{4},\qquad\nu=1\\
+   &\quad c_v\sim|t|^{-\alpha},\quad m\sim(-t)^{\beta}, \quad\chi\sim |t|^{-\gamma}, \quad\xi\sim|t|^{-\nu}
+\end{align}
+$
 
-<image src="MonteCarloQuote.png" width="800px">
+Using Finite Size Scaling
+
+$
+\begin{align}
+    x = t\,L^{\frac{1}{\nu}} \qquad\qquad T=T_c\left(1+x\,L^{-\frac{1}{\nu}}\right),
+\end{align}
+$
+
+This gives the finite size scaling (FSS) form,
+
+$
+\begin{align}
+    O(T,L) = L^{\frac{\kappa}{\nu}}\,\tilde O(x)
+\end{align}
+$
+
+and also extracting $T_c$ from Pseudo Temperature Shift 
+
+$
+\begin{align}
+    T_\chi^\star(L)&=T_c+T_c\,x_\chi^\star\, L^{-\frac{1}{\nu}} &&T_{c_v}^\star(L)=T_c+T_c\,x_{c_v}^\star\, L^{-\frac{1}{\nu}}
+\end{align}
+$
+
+
+and the Binder cumulant $U(T)$
+
+$
+\begin{align}
+    U &= 1-\frac{\langle m^4\rangle}{3\langle m^2\rangle^2}\\
+    U(T,L)& = \tilde U(x)\\
+\end{align}
+$
+
+Which at $T_c$ ($x=0$) and $U(T_c,L) = \tilde U(0)\approx0.6107$ is constant for all lattice sizes, this is a way to get $T_c$ without knowing any other exponents.
+
+Also its derivative gives us $\nu$,
+
+$
+\begin{align}
+\frac{dU}{d\beta}\bigg|_{T_c} &\propto L^{\frac{1}{\nu}}
+\end{align}
+$
+
+With these we get
+
+<p align="center">
+  <img src="CriticalExponents/figs/pngs/fss_exponents_L16-160_ns10000.png" width="800px">
+  <img src="CriticalExponents/figs/pngs/fss_binder_L16-160_ns10000.png" width="800px">
+  <img src="CriticalExponents/figs/pngs/fss_observables_L16-160_ns10000.png" width="800px">
+
+
+
+### Extras
+My favorite introduction to Monte carlo work:
+
+<p align="center">
+<img src="MonteCarloQuote.png" width="800px">
+</p>
+
+thats from Alan Sokal in his introduction to his course on Monte Carlo Methods in Statistical Mechanics.

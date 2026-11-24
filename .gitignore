@@ -16,9 +16,20 @@ efficient/data/met_results/
 efficient/data/wolff_results/
 
 efficient/cache/
+efficient/__pycache__
 
 
-efficient/troubleShooting/data
+efficient/troubleShooting/data/
+
 
 efficient/test.ipynb
 efficient/testV2.ipynb
+
+
+CriticalExponents/data/
+CriticalExponents/bin/
+CriticalExponents/data_debug/
+CriticalExponents/logs/
+CriticalExponents/temps
+CriticalExponents/cache/
+CriticalExponents/__pycache__/

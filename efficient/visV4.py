@@ -149,6 +149,114 @@ def eq_start(S_run, n_eq_sw):
 # 3. equilibration plot
 # --------------------------------------------------------------------------
 def plot_equilibration(data, T_targets=(1.8, 2.1, Tc, 2.8)):
+    """Plot Metropolis and Wolff separately for each target temperature."""
+
+    temps = next(iter(data.values()))["temps"]
+    idxs = [int(np.argmin(np.abs(temps - T))) for T in T_targets]
+
+    algos = list(data.keys())
+
+    fig, ax = plt.subplots(
+        8, len(idxs),
+        figsize=(4.5 * len(idxs), 20),
+        squeeze=False
+    )
+
+    for j, idx in enumerate(idxs):
+        T = temps[idx]
+
+        for k, algo in enumerate(algos):
+            d = data[algo]
+            cfg = ALGOS[algo]
+            b = d["burnin"][idx]
+
+            # Each algorithm gets its own four rows.
+            r0 = k * 4
+
+            if b is not None:
+                xb = sweep_clock(b["S"])
+
+                ax[r0, j].plot(
+                    xb, np.abs(b["M"]) / N,
+                    color=cfg["color"], lw=0.9, alpha=0.85,
+                    label=f"{cfg['label']} (run 0)"
+                )
+
+                ax[r0+1, j].plot(
+                    xb, b["E"] / N,
+                    color=cfg["color"], lw=0.9, alpha=0.85
+                )
+
+                burnin_sweeps = float(xb[-1]) if len(xb) else 0.0
+
+                ax[r0, j].axvline(
+                    burnin_sweeps, color=cfg["color"], ls=":", lw=1
+                )
+                ax[r0+1, j].axvline(
+                    burnin_sweeps, color=cfg["color"], ls=":", lw=1
+                )
+            else:
+                burnin_sweeps = 0.0
+
+            # Production traces from all independent runs.
+            for run in range(d["n_runs"]):
+                xp = sweep_clock(d["S"][idx][run])
+                lab = cfg["label"] if run == 0 else None
+
+                ax[r0+2, j].plot(
+                    xp, np.abs(d["M"][idx][run]) / N,
+                    color=cfg["color"], lw=0.55,
+                    alpha=0.28, label=lab
+                )
+
+                ax[r0+3, j].plot(
+                    xp, d["E"][idx][run] / N,
+                    color=cfg["color"], lw=0.55, alpha=0.28
+                )
+
+            cutoff = cfg["n_eq"]
+
+            ax[r0+2, j].axvline(
+                cutoff, color=cfg["color"], ls="--", lw=1.1
+            )
+            ax[r0+3, j].axvline(
+                cutoff, color=cfg["color"], ls="--", lw=1.1
+            )
+
+            # Labels and formatting.
+            labels = [
+                f"{cfg['label']} burn-in |m|",
+                f"{cfg['label']} burn-in e",
+                f"{cfg['label']} production |m|",
+                f"{cfg['label']} production e"
+            ]
+
+            for r in range(4):
+                a = ax[r0+r, j]
+                a.set_xlim(left=0)
+                a.grid(alpha=0.2)
+                a.set_xlabel("sweep-equivalents")
+                a.set_ylabel(labels[r])
+
+            ax[r0, j].legend(fontsize=7)
+            ax[r0+2, j].legend(fontsize=7)
+
+        ax[0, j].set_title(f"T = {T:.3f}")
+
+    fig.suptitle(
+        "Metropolis and Wolff equilibration comparison "
+        "(dotted = production starts; dashed = n_eq cutoff)",
+        y=1.002
+    )
+
+    plt.tight_layout()
+    plt.savefig(
+        OUT_DIR / f"cmp_equilibration_separate_L{L}_nsweeps{nsweeps}.pdf"
+    )
+    plt.close()
+
+'''
+def plot_equilibration(data, T_targets=(1.8, 2.1, Tc, 2.8)):
     """Plot burn-in and full production in separate panels.
 
     Rows are burn-in |m|, burn-in e, production |m| and production e.
@@ -231,7 +339,7 @@ def plot_equilibration(data, T_targets=(1.8, 2.1, Tc, 2.8)):
     plt.tight_layout()
     plt.savefig(OUT_DIR / f"cmp_equilibration_L{L}_nsweeps{nsweeps}.pdf")
     plt.close()
-
+'''
 
 # --------------------------------------------------------------------------
 # 4. analysis (pyerrors)

@@ -15,56 +15,47 @@ Wolff_Algorithm/                 # cluster algorithms study
 # Current Progress on Exponents
 In the 2D Ising Model we want to extract the critical exponents:
 
-$
-\begin{align}
-    &\quad\alpha=0,\qquad\beta=\frac{1}{8},\qquad\gamma=\frac{7}{4},\qquad\nu=1\\
-   &\quad c_v\sim|t|^{-\alpha},\quad m\sim(-t)^{\beta}, \quad\chi\sim |t|^{-\gamma}, \quad\xi\sim|t|^{-\nu}
-\end{align}
-$
+```math
+\begin{aligned}
+&\alpha=0,\qquad\beta=\frac{1}{8},\qquad\gamma=\frac{7}{4},\qquad\nu=1\\
+&c_v\sim|t|^{-\alpha},\quad m\sim(-t)^{\beta},\quad\chi\sim|t|^{-\gamma},\quad\xi\sim|t|^{-\nu}
+\end{aligned}
+```
 
 Using Finite Size Scaling
 
-$
-\begin{align}
-    x = t\,L^{\frac{1}{\nu}} \qquad\qquad T=T_c\left(1+x\,L^{-\frac{1}{\nu}}\right),
-\end{align}
-$
+```math
+x = t\,L^{1/\nu} \qquad\qquad T=T_c\left(1+x\,L^{-1/\nu}\right)
+```
 
 This gives the finite size scaling (FSS) form,
 
-$
-\begin{align}
-    O(T,L) = L^{\frac{\kappa}{\nu}}\,\tilde O(x)
-\end{align}
-$
+```math
+O(T,L) = L^{\kappa/\nu}\,\tilde O(x)
+```
 
-and also extracting $T_c$ from Pseudo Temperature Shift 
+and also extracting $T_c$ from the pseudo-critical temperature shift
 
-$
-\begin{align}
-    T_\chi^\star(L)&=T_c+T_c\,x_\chi^\star\, L^{-\frac{1}{\nu}} &&T_{c_v}^\star(L)=T_c+T_c\,x_{c_v}^\star\, L^{-\frac{1}{\nu}}
-\end{align}
-$
-
+```math
+T_\chi^\star(L)=T_c+T_c\,x_\chi^\star\,L^{-1/\nu} \qquad\qquad T_{c_v}^\star(L)=T_c+T_c\,x_{c_v}^\star\,L^{-1/\nu}
+```
 
 and the Binder cumulant $U(T)$
 
-$
-\begin{align}
-    U &= 1-\frac{\langle m^4\rangle}{3\langle m^2\rangle^2}\\
-    U(T,L)& = \tilde U(x)\\
-\end{align}
-$
+```math
+\begin{aligned}
+U &= 1-\frac{\langle m^4\rangle}{3\langle m^2\rangle^2}\\
+U(T,L) &= \tilde U(x)
+\end{aligned}
+```
 
-Which at $T_c$ ($x=0$) and $U(T_c,L) = \tilde U(0)\approx0.6107$ is constant for all lattice sizes, this is a way to get $T_c$ without knowing any other exponents.
+At $T_c$ ($x=0$), $U(T_c,L) = \tilde U(0)\approx 0.6107$ is the same for all lattice sizes, so the crossing point gives $T_c$ without knowing any other exponents.
 
-Also its derivative gives us $\nu$,
+Its derivative also gives us $\nu$:
 
-$
-\begin{align}
-\frac{dU}{d\beta}\bigg|_{T_c} &\propto L^{\frac{1}{\nu}}
-\end{align}
-$
+```math
+\left.\frac{dU}{d\beta}\right|_{T_c} \propto L^{1/\nu}
+```
 
 With these we get
 
@@ -72,7 +63,7 @@ With these we get
   <img src="CriticalExponents/figs/pngs/fss_exponents_L16-160_ns10000.png" width="800px">
   <img src="CriticalExponents/figs/pngs/fss_binder_L16-160_ns10000.png" width="800px">
   <img src="CriticalExponents/figs/pngs/fss_observables_L16-160_ns10000.png" width="800px">
-
+</p>
 
 
 ### Extras
